@@ -1,0 +1,8 @@
+{
+  "appId": "com.mibolsillo.cop",
+  "appName": "Mi Bolsillo COP",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

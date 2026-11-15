@@ -1,0 +1,16 @@
+{
+  "name": "mi-bolsillo-cop",
+  "version": "6.6.0",
+  "description": "Control de Gastos Mensuales y Bolsillos COP",
+  "private": true,
+  "scripts": {
+    "cap:sync": "npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/filesystem": "^6.0.1",
+    "@capacitor/share": "^6.0.2"
+  }
+}
