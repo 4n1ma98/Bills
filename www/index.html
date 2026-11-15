@@ -1229,6 +1229,26 @@
                         </div>
                     </div>
 
+                    <!-- Presupuesto mensual asignado (opcional para Gastos) -->
+                    <div id="classBudgetGroup" class="space-y-1">
+                        <div class="flex items-center justify-between">
+                            <label for="classBudgetInput" class="text-[11px] font-bold theme-text-muted flex items-center gap-1.5">
+                                <span>🎯 Presupuesto mensual base</span>
+                                <span class="text-[10px] text-slate-400 font-normal">(opcional)</span>
+                            </label>
+                            <span id="classBudgetPreview" class="text-[11px] font-extrabold text-indigo-400"></span>
+                        </div>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2.5 text-xs font-bold theme-text-muted pointer-events-none">$</span>
+                            <input type="text" id="classBudgetInput" inputmode="numeric" autocomplete="off" placeholder="Ej: 500.000 (opcional)"
+                                class="w-full pl-7 pr-3 py-2 theme-input bg-slate-900 border border-slate-700 rounded-xl text-xs font-semibold theme-text-main focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <p class="text-[9.5px] theme-text-muted leading-tight">
+                            Si fijas un presupuesto, lo que sobre en el mes se sumará al mes siguiente; si te pasas, se restará de tu base.
+                        </p>
+                    </div>
+
+
                     <!-- Barra rápida de Emojis sugeridos -->
                     <div>
                         <span class="block text-[10px] theme-text-muted mb-1">Toque rápido de icono (o usa tu teclado):</span>
@@ -1513,7 +1533,7 @@
                         Quitar filtro ✕
                     </button>
                 </div>
-                <div class="grid grid-cols-3 gap-2 pt-0.5 text-[11px]">
+                <div id="filteredSubtotalMetricsGrid" class="grid grid-cols-3 gap-2 pt-0.5 text-[11px]">
                     <div>
                         <span class="theme-text-muted block text-[10px]">Ingresos filtro</span>
                         <strong id="filteredIncomeSum" class="text-emerald-400">$ 0</strong>
@@ -1527,6 +1547,8 @@
                         <strong id="filteredNetSum" class="theme-text-main">$ 0</strong>
                     </div>
                 </div>
+                <!-- Tarjeta dinámica de Presupuesto por Categoría -->
+                <div id="categoryBudgetCardContainer"></div>
             </div>
         </div>
 
@@ -3123,13 +3145,16 @@
             classificationFormType = type === 'INCOME' ? 'INCOME' : 'EXPENSE';
             const btnExp = document.getElementById('btnClassTypeExpense');
             const btnInc = document.getElementById('btnClassTypeIncome');
+            const budgetGroup = document.getElementById('classBudgetGroup');
 
             if (classificationFormType === 'INCOME') {
                 btnInc.className = 'py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-sm';
                 btnExp.className = 'py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all theme-text-muted hover:opacity-90';
+                if (budgetGroup) budgetGroup.classList.add('hidden');
             } else {
                 btnExp.className = 'py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all bg-rose-600 text-white shadow-sm';
                 btnInc.className = 'py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all theme-text-muted hover:opacity-90';
+                if (budgetGroup) budgetGroup.classList.remove('hidden');
             }
         };
 
@@ -3214,10 +3239,14 @@
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                     : 'bg-rose-500/20 text-rose-300 border-rose-500/30';
                 const badgeText = item.type === 'INCOME' ? '+ Ingreso' : '- Gasto';
+                const hasBudget = item.type === 'EXPENSE' && item.budget && Number(item.budget) > 0;
+                const budgetBadge = hasBudget
+                    ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-md border border-indigo-500/40 bg-indigo-500/20 text-indigo-300 shrink-0">🎯 Presupuesto: ${formatCOP(item.budget)}/mes</span>`
+                    : '';
 
                 return `
                     <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl theme-card bg-slate-800/90 border border-slate-700/70 text-xs">
-                        <div class="flex items-center gap-2 min-w-0">
+                        <div class="flex items-center gap-2 min-w-0 flex-wrap">
                             <span class="w-7 h-7 rounded-lg theme-subcard bg-slate-900 border border-slate-700/80 flex items-center justify-center text-sm shrink-0">
                                 ${escapeHTML(item.emoji || '🏷️')}
                             </span>
@@ -3225,6 +3254,7 @@
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded-md border ${badgeClass} shrink-0">
                                 ${badgeText}
                             </span>
+                            ${budgetBadge}
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
                             <button type="button" data-id="${escapeHTML(item.id)}" onclick="window.editClassification(this.dataset.id)" title="Editar clasificación"
@@ -3249,6 +3279,8 @@
                 const nameInput = document.getElementById('classNameInput');
                 const rawEmoji = (emojiInput.value || '🏷️').trim() || '🏷️';
                 const rawName = (nameInput.value || '').trim();
+                const rawBudgetDigits = String(document.getElementById('classBudgetInput')?.value || '').replace(/\D/g, '');
+                const budget = (classificationFormType === 'EXPENSE' && rawBudgetDigits) ? parseInt(rawBudgetDigits, 10) : 0;
 
                 if (!rawName) {
                     showToast('Escribe un nombre para la clasificación', true);
@@ -3296,7 +3328,9 @@
                             ...oldItem,
                             emoji: rawEmoji,
                             name: rawName,
-                            type: classificationFormType
+                            type: classificationFormType,
+                            budget: budget,
+                            budgetStartMonth: oldItem.budgetStartMonth || (budget > 0 ? (monthFilter.value !== 'ALL' ? monthFilter.value : getCurrentYearMonth()) : null)
                         };
                         classifications[idx] = updatedCatItem;
                         deletedClassificationTombstoneIds.delete(String(updatedCatItem.id));
@@ -3360,7 +3394,9 @@
                         id: `cat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                         emoji: rawEmoji,
                         name: rawName,
-                        type: classificationFormType
+                        type: classificationFormType,
+                        budget: budget,
+                        budgetStartMonth: budget > 0 ? (monthFilter.value !== 'ALL' ? monthFilter.value : getCurrentYearMonth()) : null
                     };
                     deletedClassificationTombstoneIds.delete(String(newCat.id));
                     classifications.push(newCat);
@@ -3380,6 +3416,10 @@
 
                     nameInput.value = '';
                     emojiInput.value = '🏷️';
+                    const budgetInp = document.getElementById('classBudgetInput');
+                    const budgetPrev = document.getElementById('classBudgetPreview');
+                    if (budgetInp) budgetInp.value = '';
+                    if (budgetPrev) budgetPrev.textContent = '';
                     window.setClassificationListFilter(classificationFormType);
                     showToast('🏷️ Clasificación agregada');
                 }
@@ -3391,6 +3431,19 @@
                 renderApp();
             });
         }
+        // Escucha en vivo para formatear presupuesto con separador de miles y millones (es-CO)
+        const classBudgetInputEl = document.getElementById('classBudgetInput');
+        const classBudgetPreviewEl = document.getElementById('classBudgetPreview');
+        if (classBudgetInputEl) {
+            classBudgetInputEl.addEventListener('input', (e) => {
+                const digits = e.target.value.replace(/\D/g, '');
+                e.target.value = digits ? parseInt(digits, 10).toLocaleString('es-CO') : '';
+                if (classBudgetPreviewEl) {
+                    classBudgetPreviewEl.textContent = digits ? `$ ${parseInt(digits, 10).toLocaleString('es-CO')}` : '';
+                }
+            });
+        }
+
 
         window.editClassification = function(id) {
             const item = classifications.find(c => c.id === id);
@@ -3399,6 +3452,15 @@
             window.setClassificationFormType(item.type);
             document.getElementById('classEmojiInput').value = item.emoji || '🏷️';
             document.getElementById('classNameInput').value = item.name || '';
+            const budgetInp = document.getElementById('classBudgetInput');
+            const budgetPrev = document.getElementById('classBudgetPreview');
+            if (budgetInp) {
+                const hasBud = item.budget && Number(item.budget) > 0;
+                budgetInp.value = hasBud ? Number(item.budget).toLocaleString('es-CO') : '';
+                if (budgetPrev) {
+                    budgetPrev.textContent = hasBud ? formatCOP(item.budget) : '';
+                }
+            }
             document.getElementById('classificationFormTitle').textContent = '✏️ Editando clasificación';
             document.getElementById('cancelClassificationEditBtn').classList.remove('hidden');
             document.getElementById('classificationSubmitBtn').textContent = '💾 Guardar cambios';
@@ -3409,6 +3471,10 @@
             editingClassificationId = null;
             document.getElementById('classEmojiInput').value = '🏷️';
             document.getElementById('classNameInput').value = '';
+            const budgetInp = document.getElementById('classBudgetInput');
+            const budgetPrev = document.getElementById('classBudgetPreview');
+            if (budgetInp) budgetInp.value = '';
+            if (budgetPrev) budgetPrev.textContent = '';
             document.getElementById('classificationFormTitle').textContent = 'Nueva clasificación';
             document.getElementById('cancelClassificationEditBtn').classList.add('hidden');
             document.getElementById('classificationSubmitBtn').textContent = '+ Agregar';
@@ -4408,11 +4474,18 @@
                 const emoji = String(c.emoji || '🏷️').trim() || '🏷️';
                 const type = c.type === 'INCOME' ? 'INCOME' : 'EXPENSE';
                 if (!name) return;
+                const rawBud = Number(c.budget ?? c.presupuesto ?? 0);
+                const budget = (type === 'EXPENSE' && !isNaN(rawBud) && rawBud > 0) ? Math.round(rawBud) : 0;
+                const budgetStartMonth = (c.budgetStartMonth && /^\d{4}-\d{2}$/.test(String(c.budgetStartMonth)))
+                    ? String(c.budgetStartMonth)
+                    : null;
                 validClassifications.push({
                     id: String(c.id || `cat_imp_${Date.now()}_${idx}`),
                     emoji: emoji.slice(0, 4),
                     name: name.slice(0, 28),
-                    type
+                    type,
+                    budget,
+                    budgetStartMonth
                 });
             });
 
@@ -5125,6 +5198,193 @@
             }
         };
 
+        // ============================================================================
+        // MOTOR DE PRESUPUESTOS POR CATEGORÍA CON ARRASTRE MENSUAL (ROLLOVER)
+        // ============================================================================
+        function calculateCategoryBudgetStatus(categoryLabelOrName, targetMonth) {
+            if (!categoryLabelOrName || categoryLabelOrName === 'ALL') return null;
+
+            const norm = String(categoryLabelOrName).trim().toLowerCase();
+            const cat = classifications.find(c => {
+                const fullLabel = formatClassificationLabel(c).trim().toLowerCase();
+                const rawName = String(c.name || '').trim().toLowerCase();
+                return fullLabel === norm || rawName === norm;
+            });
+
+            if (!cat || cat.type !== 'EXPENSE' || !cat.budget || Number(cat.budget) <= 0) {
+                return null;
+            }
+
+            const baseBudget = Math.round(Number(cat.budget));
+            const fullLabel = formatClassificationLabel(cat);
+
+            const allCatExpenses = transactions.filter(t =>
+                isHomeVisibleTransaction(t) &&
+                normalizeCategory(t) === fullLabel &&
+                Number(t.amount) < 0
+            );
+
+            if (!targetMonth || targetMonth === 'ALL') {
+                const totalHistoricalSpent = Math.abs(allCatExpenses.reduce((sum, t) => sum + Number(t.amount || 0), 0));
+                return {
+                    hasBudget: true,
+                    isAllMonths: true,
+                    category: fullLabel,
+                    catItem: cat,
+                    baseBudget,
+                    availableBudget: baseBudget,
+                    rolloverFromPrev: 0,
+                    spentThisMonth: totalHistoricalSpent,
+                    remainingThisMonth: baseBudget - totalHistoricalSpent,
+                    percentageSpent: baseBudget > 0 ? Math.round((totalHistoricalSpent / baseBudget) * 100) : 0
+                };
+            }
+
+            const earliestTx = allCatExpenses
+                .filter(t => t.date && /^\d{4}-\d{2}/.test(t.date))
+                .map(t => t.date.substring(0, 7))
+                .sort()[0] || null;
+
+            let startMonth = cat.budgetStartMonth || earliestTx || targetMonth;
+            if (targetMonth < startMonth) {
+                startMonth = targetMonth;
+            }
+
+            let currentIterYm = startMonth;
+            let accumulatedRollover = 0;
+            let maxIter = 120; // Límite de seguridad de 10 años
+
+            while (currentIterYm < targetMonth && maxIter-- > 0) {
+                const monthAvailable = baseBudget + accumulatedRollover;
+                const monthSpent = Math.abs(
+                    allCatExpenses
+                        .filter(t => t.date && t.date.startsWith(currentIterYm))
+                        .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+                );
+                accumulatedRollover = monthAvailable - monthSpent;
+                currentIterYm = getAdjacentYearMonth(currentIterYm, 1);
+            }
+
+            const availableBudget = baseBudget + accumulatedRollover;
+            const spentThisMonth = Math.abs(
+                allCatExpenses
+                    .filter(t => t.date && t.date.startsWith(targetMonth))
+                    .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+            );
+            const remainingThisMonth = availableBudget - spentThisMonth;
+            const denominator = availableBudget > 0 ? availableBudget : (baseBudget > 0 ? baseBudget : 1);
+            const percentageSpent = Math.round((spentThisMonth / denominator) * 100);
+
+            return {
+                hasBudget: true,
+                isAllMonths: false,
+                category: fullLabel,
+                catItem: cat,
+                targetMonth,
+                baseBudget,
+                startMonth,
+                rolloverFromPrev: accumulatedRollover,
+                availableBudget,
+                spentThisMonth,
+                remainingThisMonth,
+                percentageSpent
+            };
+        }
+
+        function renderCategoryBudgetCard(categoryFilter, selectedMonth) {
+            const container = document.getElementById('categoryBudgetCardContainer');
+            const metricsGrid = document.getElementById('filteredSubtotalMetricsGrid');
+            if (!container) return;
+
+            if (!categoryFilter || categoryFilter === 'ALL') {
+                container.innerHTML = '';
+                if (metricsGrid) metricsGrid.classList.remove('hidden');
+                return;
+            }
+
+            const bStatus = calculateCategoryBudgetStatus(categoryFilter, selectedMonth);
+            if (!bStatus) {
+                container.innerHTML = '';
+                if (metricsGrid) metricsGrid.classList.remove('hidden');
+                return;
+            }
+
+            // Si la categoría tiene presupuesto, ocultamos la cuadrícula redundante de ingresos/gastos/balance (imagen 1)
+            if (metricsGrid) {
+                metricsGrid.classList.add('hidden');
+            }
+
+            const isSurplus = bStatus.remainingThisMonth >= 0;
+            const badgeClass = isSurplus
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                : 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+            const badgeText = isSurplus
+                ? `✅ Te quedan ${formatCOP(bStatus.remainingThisMonth)}`
+                : `⚠️ Te pasaste por ${formatCOP(Math.abs(bStatus.remainingThisMonth))}`;
+
+            const clampedPct = Math.min(100, Math.max(0, bStatus.percentageSpent));
+            let barColor = 'bg-emerald-500';
+            if (bStatus.percentageSpent > 100) {
+                barColor = 'bg-rose-500';
+            } else if (bStatus.percentageSpent >= 75) {
+                barColor = 'bg-amber-400';
+            }
+
+            let rolloverNote = '';
+            if (bStatus.isAllMonths) {
+                rolloverNote = `Presupuesto base mensual: <strong>${formatCOP(bStatus.baseBudget)}</strong> · Mostrando gasto histórico acumulado`;
+            } else if (bStatus.rolloverFromPrev > 0) {
+                rolloverNote = `Presupuesto base: <strong>${formatCOP(bStatus.baseBudget)}</strong> + Sobrante mes anterior: <strong class="text-emerald-400">+${formatCOP(bStatus.rolloverFromPrev)}</strong>`;
+            } else if (bStatus.rolloverFromPrev < 0) {
+                rolloverNote = `Presupuesto base: <strong>${formatCOP(bStatus.baseBudget)}</strong> - Déficit mes anterior: <strong class="text-rose-400">-${formatCOP(Math.abs(bStatus.rolloverFromPrev))}</strong>`;
+            } else {
+                rolloverNote = `Presupuesto base configurado: <strong>${formatCOP(bStatus.baseBudget)}</strong> (mes de inicio sin arrastre previo)`;
+            }
+
+            container.innerHTML = `
+                <div class="mt-1 space-y-2">
+                    <div class="flex items-center justify-between gap-1 flex-wrap">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            <span class="text-sm">🎯</span>
+                            <span class="font-extrabold text-white text-xs truncate">Presupuesto: ${escapeHTML(bStatus.category)}</span>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeClass} shrink-0">
+                            ${badgeText}
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800 text-[11px]">
+                        <div>
+                            <span class="theme-text-muted block text-[9px]">Disponible este mes</span>
+                            <strong class="text-indigo-300 text-xs block truncate">${formatCOP(bStatus.availableBudget)}</strong>
+                        </div>
+                        <div>
+                            <span class="theme-text-muted block text-[9px]">Gastado este mes</span>
+                            <strong class="text-rose-400 text-xs block truncate">${copFormatter.format(bStatus.spentThisMonth)}</strong>
+                        </div>
+                        <div>
+                            <span class="theme-text-muted block text-[9px]">${isSurplus ? 'Saldo restante' : 'Sobregiro'}</span>
+                            <strong class="${isSurplus ? 'text-emerald-400' : 'text-rose-400'} text-xs block truncate">${formatCOP(bStatus.remainingThisMonth)}</strong>
+                        </div>
+                    </div>
+
+                    <div class="text-[10px] theme-text-muted bg-slate-950/60 px-2.5 py-1.5 rounded-xl border border-slate-800/70 leading-snug">
+                        ${rolloverNote}
+                    </div>
+
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center text-[10px]">
+                            <span class="theme-text-muted font-medium">Consumo del presupuesto:</span>
+                            <span class="font-extrabold ${bStatus.percentageSpent > 100 ? 'text-rose-400' : 'text-indigo-300'}">${bStatus.percentageSpent}%</span>
+                        </div>
+                        <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                            <div class="h-full ${barColor} rounded-full transition-all duration-500" style="width: ${clampedPct}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         function renderCategorySummary(monthRecords, totalExpense, activeCategoryFilter) {
             const section = document.getElementById('categorySummarySection');
             const barsContainer = document.getElementById('categorySummaryBars');
@@ -5158,12 +5418,23 @@
                 const isSelected = activeCategoryFilter === cat;
                 const activeRing = isSelected ? 'ring-2 ring-indigo-500 bg-indigo-500/10' : 'hover:opacity-90';
 
+                const bStatus = calculateCategoryBudgetStatus(cat, monthFilter.value);
+                let budgetPill = '';
+                if (bStatus) {
+                    if (bStatus.remainingThisMonth >= 0) {
+                        budgetPill = `<span class="text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">🎯 Quedan ${formatCOP(bStatus.remainingThisMonth)}</span>`;
+                    } else {
+                        budgetPill = `<span class="text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30">⚠️ Excedido en ${formatCOP(Math.abs(bStatus.remainingThisMonth))}</span>`;
+                    }
+                }
+
                 return `
                     <button type="button" data-category="${escapeHTML(cat)}" onclick="window.setCategoryFilter(this.dataset.category)"
                         class="w-full text-left p-2 rounded-2xl theme-subcard bg-slate-900/70 border border-slate-800 transition ${activeRing}">
                         <div class="flex items-center justify-between text-xs mb-1">
                             <span class="font-bold theme-text-main">${escapeHTML(cat)}</span>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                                ${budgetPill}
                                 <span class="font-extrabold text-rose-400">${copFormatter.format(amount)}</span>
                                 <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300">${pct}%</span>
                             </div>
@@ -5316,7 +5587,7 @@
                 return descMatch || catMatch || amountMatch || dateMatch;
             });
 
-            // 6. Mostrar u ocultar Subtotal Filtrado
+            // 6. Mostrar u ocultar Subtotal Filtrado y Presupuesto por Categoría
             const subtotalBanner = document.getElementById('filteredSubtotalBanner');
             if (searchQuery || categoryFilter !== 'ALL') {
                 subtotalBanner.classList.remove('hidden');
@@ -5330,8 +5601,14 @@
                 document.getElementById('filteredIncomeSum').textContent = `+ ${copFormatter.format(filtInc)}`;
                 document.getElementById('filteredExpenseSum').textContent = `- ${copFormatter.format(filtExp)}`;
                 document.getElementById('filteredNetSum').textContent = formatCOP(filtInc - filtExp);
+
+                renderCategoryBudgetCard(categoryFilter, selectedMonth);
             } else {
                 subtotalBanner.classList.add('hidden');
+                const bCardContainer = document.getElementById('categoryBudgetCardContainer');
+                if (bCardContainer) bCardContainer.innerHTML = '';
+                const metricsGrid = document.getElementById('filteredSubtotalMetricsGrid');
+                if (metricsGrid) metricsGrid.classList.remove('hidden');
             }
 
             recordsCount.textContent = `${displayList.length} ${displayList.length === 1 ? 'movimiento mostrado' : 'movimientos mostrados'}`;
