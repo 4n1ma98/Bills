@@ -4,15 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Mi Bolsillo COP - Control de Gastos y Bolsillos</title>
-    <link rel="manifest" href="./manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Mi Bolsillo">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2830/2830284.png">
     <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="./tailwind.js"></script>
     <!-- Google Fonts: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./fonts/inter.css">
     <style>
         /* =========================================================
            VARIABLES DE TEMA: MASCULINO (M) Y FEMENINO (F)
@@ -1603,10 +1598,9 @@
     </div>
 
     <script type="module">
-        // Importaciones de Firebase para Persistencia en la Nube
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Referencias Firebase locales (desacopladas para funcionamiento 100% offline)
+        let initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged;
+        let getFirestore, doc, setDoc, deleteDoc, collection, onSnapshot;
 
         // ============================================================================
         // 1. CONSTANTES, CATEGORÍAS Y ESTADO DE LA APLICACIÓN
@@ -2390,6 +2384,21 @@
 
             try {
                 if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                    const fbApp = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+                    const fbAuth = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
+                    const fbFs = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    initializeApp = fbApp.initializeApp;
+                    getAuth = fbAuth.getAuth;
+                    signInAnonymously = fbAuth.signInAnonymously;
+                    signInWithCustomToken = fbAuth.signInWithCustomToken;
+                    onAuthStateChanged = fbAuth.onAuthStateChanged;
+                    getFirestore = fbFs.getFirestore;
+                    doc = fbFs.doc;
+                    setDoc = fbFs.setDoc;
+                    deleteDoc = fbFs.deleteDoc;
+                    collection = fbFs.collection;
+                    onSnapshot = fbFs.onSnapshot;
+
                     const firebaseConfig = JSON.parse(__firebase_config);
                     const app = initializeApp(firebaseConfig);
                     authCloud = getAuth(app);
@@ -6774,13 +6783,5 @@
             initPersistence();
         });
     </script>
-    <script>
-      if ('serviceWorker' in navigator) {
-          window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js');
-            });
-        }
-    </script>
-
 </body>
 </html>
